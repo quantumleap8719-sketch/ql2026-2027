@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.OpModes.Auto;
-import com.bylazar.telemetry.TelemetryManager;
+
 import com.bylazar.telemetry.PanelsTelemetry;
+import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -16,7 +17,7 @@ public class PollenStrafeTest extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         mecanum = new Mecanum(hardwareMap, telemetryM);
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
-
+        // Pipeline 1 = green pollen
         limelight.pipelineSwitch(1);
         limelight.start();
         telemetry.addLine("Ready");
@@ -25,22 +26,23 @@ public class PollenStrafeTest extends LinearOpMode {
         while (opModeIsActive()) {
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
-                double tx = result.getTx();
-                telemetry.addData("TX", tx);
-                if (tx > 2) {
-                    mecanum.setPower(0.25, 0, 0);
-                }// Pollen to left
-                else if (tx < -2) {
-                    mecanum.setPower(-0.25, 0, 0);
-                }
+                double area = result.getTa();
+                telemetry.addData("Pollen", "found");
+                telemetry.addData("Area", area);
 
-                // Pollen in center
+                // If pollen is still far away
+                if (area < 8) {
+                    // Strafe toward the Limelight
+                    mecanum.setPower(0.25, 0, 0);
+                }
+                // Pollen is close enough
                 else {
                     mecanum.setPower(0, 0, 0);
+                    telemetry.addLine("POLLEN REACHED");
                 }
-
-            } else {
-                // No pollen detected
+            }
+            else {
+                // Don't see pollen
                 mecanum.setPower(0, 0, 0);
                 telemetry.addLine("No Pollen");
             }

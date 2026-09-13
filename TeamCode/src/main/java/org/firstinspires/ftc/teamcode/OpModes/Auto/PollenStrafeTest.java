@@ -38,7 +38,7 @@ public class PollenStrafeTest extends LinearOpMode {
                 // Pollen is close enough
                 else {
                     mecanum.setPower(0, 0, 0);
-                    telemetry.addLine("POLLEN REACHED");
+                    telemetry.addLine("pollen reached");
                 }
             }
             else {

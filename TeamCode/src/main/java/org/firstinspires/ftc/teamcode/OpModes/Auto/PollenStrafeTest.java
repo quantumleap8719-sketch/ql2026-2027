@@ -16,8 +16,8 @@ public class PollenStrafeTest extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         mecanum = new Mecanum(hardwareMap, telemetryM);
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
-        // Pipeline 0 should be your yellow detection pipeline
-        limelight.pipelineSwitch(0);
+
+        limelight.pipelineSwitch(1);
         limelight.start();
         telemetry.addLine("Ready");
         telemetry.update();

@@ -20,34 +20,45 @@ public class PollenStrafeTest extends LinearOpMode {
         // Pipeline 1 = green pollen
         limelight.pipelineSwitch(1);
         limelight.start();
-        telemetry.addLine("Ready");
-        telemetry.update();
+        telemetryM.addLine("Ready");
+        telemetryM.update();
         waitForStart();
         while (opModeIsActive()) {
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
                 double area = result.getTa();
-                telemetry.addData("Pollen", "found");
-                telemetry.addData("Area", area);
+                double tx = result.getTx();
+                telemetryM.addData("Pollen", "found");
+                telemetryM.addData("Area", area);
+                if(Math.abs(tx) < 3.8){
+                    mecanum.setPower(0,0,0);
+                }
 
                 // If pollen is still far away
                 if (area < 8) {
                     // Strafe toward the Limelight
-                    mecanum.setPower(0.25, 0, 0);
-                }
-                // Pollen is close enough
-                else {
+                    mecanum.setPower(-0.25, 0, 0);
+                    if (tx > 4) {
+                        mecanum.setPower(-.25, .25, 0);
+                    }// Pollen to left
+                    else if (tx < -4) {
+                        mecanum.setPower(-.25, -.25, 0);
+                    }
+                } else {
                     mecanum.setPower(0, 0, 0);
-                    telemetry.addLine("pollen reached");
+                    telemetryM.addLine("pollen reached");
                 }
-            }
+                // Pollen is close enoughelse {
+
+                }
+
             else {
                 // Don't see pollen
                 mecanum.setPower(0, 0, 0);
-                telemetry.addLine("No Pollen");
+                telemetryM.addLine("No Pollen");
             }
             mecanum.writeAll();
-            telemetry.update();
+            telemetryM.update();
         }
         mecanum.setPower(0, 0, 0);
         mecanum.writeAll();

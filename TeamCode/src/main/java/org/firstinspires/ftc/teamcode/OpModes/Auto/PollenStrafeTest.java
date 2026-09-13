@@ -19,14 +19,14 @@ public class PollenStrafeTest extends LinearOpMode {
 
         limelight.pipelineSwitch(1);
         limelight.start();
-        telemetry.addLine("Ready");
-        telemetry.update();
+        telemetryM.addLine("Ready");
+        telemetryM.update();
         waitForStart();
         while (opModeIsActive()) {
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
                 double tx = result.getTx();
-                telemetry.addData("TX", tx);
+                telemetryM.addData("TX", tx);
                 if (tx > 2) {
                     mecanum.setPower(0.25, 0, 0);
                 }// Pollen to left
@@ -42,10 +42,10 @@ public class PollenStrafeTest extends LinearOpMode {
             } else {
                 // No pollen detected
                 mecanum.setPower(0, 0, 0);
-                telemetry.addLine("No Pollen");
+                telemetryM.addLine("No Pollen");
             }
             mecanum.writeAll();
-            telemetry.update();
+            telemetryM.update();
         }
         mecanum.setPower(0, 0, 0);
         mecanum.writeAll();

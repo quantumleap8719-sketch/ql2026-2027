@@ -75,6 +75,12 @@ public class Mecanum{
         motors[counter].write();
         counter = (counter + 1) % 4;
     }
+    public void writeAll() {
+        for (int i = 0; i < 4; i++) {
+            motors[i].write();
+        }
+    }
+
 
     public void setPower(double x, double y, double rot) {
         // Compute raw motor powers

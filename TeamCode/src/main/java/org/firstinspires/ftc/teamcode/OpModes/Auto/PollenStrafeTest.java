@@ -30,10 +30,9 @@ public class PollenStrafeTest extends LinearOpMode {
                 double tx = result.getTx();
                 telemetry.addData("Pollen", "found");
                 telemetry.addData("Area", area);
-                if(Math.abs(tx) < 3.8){
+                if (Math.abs(tx) < 3.8){
                     mecanum.setPower(0,0,0);
                 }
-
                 // If pollen is still far away
                 if (area < 8) {
                     // Strafe toward the Limelight
@@ -48,8 +47,7 @@ public class PollenStrafeTest extends LinearOpMode {
                     mecanum.setPower(0, 0, 0);
                     telemetry.addLine("pollen reached");
                 }
-                // Pollen is close enoughelse {
-
+                // Pollen is close enough
                 }
 
             else {

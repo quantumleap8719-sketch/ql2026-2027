@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.Components;
 
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
@@ -19,9 +18,9 @@ public class limelight {
     private VisionPortal visionPortal;
 
     private List<AprilTagDetection> detectedTag = new ArrayList<>();
-    TelemetryManager telemetryM;
-    public void init(HardwareMap map, TelemetryManager telemetryM){
-        this.telemetryM = telemetryM;
+//    TelemetryManager telemetryM;
+    public void init(HardwareMap map){
+//        this.telemetryM = telemetryM;
         aprilTagProcessor = new AprilTagProcessor.Builder()
                 .setDrawTagID(true)
                 .setDrawTagOutline(true)

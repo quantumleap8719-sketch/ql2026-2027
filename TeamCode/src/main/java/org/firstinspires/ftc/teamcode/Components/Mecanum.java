@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.Components;
 
 
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -18,8 +17,7 @@ import org.firstinspires.ftc.teamcode.Wrapper.CacheMotor;
 public class Mecanum{
     CacheMotor[] motors = new CacheMotor[4];
 
-    TelemetryManager telemetry;
-
+Telemetry telemetry;
     PidController xPID, yPID, hPID;
     public static double kp = 0.08;
     public static double ki = 0;
@@ -30,7 +28,7 @@ public class Mecanum{
     public static double kdh = 0.12;
     int counter;
 
-    public Mecanum(HardwareMap map, TelemetryManager telemetry){
+    public Mecanum(HardwareMap map, Telemetry telemetry){
         this.telemetry = telemetry;
         motors[0] = new CacheMotor(map, "front_left");
         motors[1] = new CacheMotor(map, "front_right");

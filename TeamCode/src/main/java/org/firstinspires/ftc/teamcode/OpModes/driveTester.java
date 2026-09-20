@@ -1,10 +1,6 @@
 package org.firstinspires.ftc.teamcode.OpModes;
 
 
-import com.bylazar.configurables.PanelsConfigurables;
-import com.bylazar.panels.Panels;
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -20,16 +16,14 @@ public class driveTester extends LinearOpMode {
     Mecanum mecanum;
     GoBildaPinpointDriver odo;
     boolean fieldCentric = false;
-    TelemetryManager telemetryM;
     GamepadEx gamepadEx1;
     @Override
     public void runOpMode() throws InterruptedException {
-        mecanum = new Mecanum(hardwareMap,telemetryM);
+        mecanum = new Mecanum(hardwareMap,telemetry);
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.init();
         odo.resetPosAndIMU();
         gamepadEx1 = new GamepadEx(gamepad1);
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
 
         waitForStart();
@@ -53,8 +47,7 @@ public class driveTester extends LinearOpMode {
 
             mecanum.write();
 
-            telemetryM.debug("Robot Pos",odo.getPosition());
-            telemetryM.update();
+
         }
     }
 }

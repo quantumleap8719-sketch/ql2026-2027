@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode.OpModes.Auto;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -11,25 +9,27 @@ import org.firstinspires.ftc.teamcode.Components.Mecanum;
 public class PollenStrafeTest extends LinearOpMode {
     Mecanum mecanum;
     Limelight3A limelight;
-    TelemetryManager telemetryM;
+
     @Override
     public void runOpMode() throws InterruptedException {
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        mecanum = new Mecanum(hardwareMap, telemetryM);
+        mecanum = new Mecanum(hardwareMap, telemetry);
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
         // Pipeline 1 = green pollen
         limelight.pipelineSwitch(1);
         limelight.start();
-        telemetryM.addLine("Ready");
-        telemetryM.update();
+        telemetry.addLine("Ready");
+        telemetry.update();
+
         waitForStart();
+
         while (opModeIsActive()) {
             LLResult result = limelight.getLatestResult();
+
             if (result != null && result.isValid()) {
                 double area = result.getTa();
                 double tx = result.getTx();
-                telemetryM.addData("Pollen", "found");
-                telemetryM.addData("Area", area);
+                telemetry.addData("Pollen", "found");
+                telemetry.addData("Area", area);
                 if(Math.abs(tx) < 3.8){
                     mecanum.setPower(0,0,0);
                 }
@@ -46,7 +46,7 @@ public class PollenStrafeTest extends LinearOpMode {
                     }
                 } else {
                     mecanum.setPower(0, 0, 0);
-                    telemetryM.addLine("pollen reached");
+                    telemetry.addLine("pollen reached");
                 }
                 // Pollen is close enoughelse {
 
@@ -55,10 +55,10 @@ public class PollenStrafeTest extends LinearOpMode {
             else {
                 // Don't see pollen
                 mecanum.setPower(0, 0, 0);
-                telemetryM.addLine("No Pollen");
+                telemetry.addLine("No Pollen");
             }
             mecanum.writeAll();
-            telemetryM.update();
+            telemetry.update();
         }
         mecanum.setPower(0, 0, 0);
         mecanum.writeAll();

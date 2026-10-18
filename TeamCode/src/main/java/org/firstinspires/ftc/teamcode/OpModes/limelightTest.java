@@ -10,110 +10,107 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.Components.GoBildaPinpointDriver;
+import org.firstinspires.ftc.teamcode.Components.LimelightTagLocalizer;
 
-
-@TeleOp(name = "Limelight MegaTag1 Localization")
+/*
+ * Shows the robot's offset from an AprilTag, plus the field-pose (MegaTag) values
+ * for comparison.
+ *
+ * ONE-TIME CHECKS (robot square to the tag, about 1 m away):
+ *  1. Turn the robot in place. Of "Raw yaw / pitch / roll", the one that changes
+ *     about 1 degree per degree of turn is the heading. If it isn't yaw, set
+ *     LimelightTagLocalizer.HEADING_AXIS to PITCH or ROLL.
+ *  2. Turn left (counter-clockwise). If "Heading (deg)" goes negative,
+ *     set HEADING_SIGN = -1.
+ *  3. Slide the robot to its right. Pick whichever sign you want for lateral
+ *     and set LATERAL_SIGN to match.
+ *  4. Measure the real distance from the tag face to the robot center.
+ *     "Forward" should match within a couple of cm. If it's off by a fixed
+ *     amount, the camera pose in the Limelight web UI is wrong; if it's off
+ *     by a ratio, the tag size is wrong.
+ */
+@TeleOp(name = "Limelight Tag Localization")
 public class limelightTest extends LinearOpMode {
 
-    private Limelight3A limelight;
-    private GoBildaPinpointDriver odo;
-    private TelemetryManager telemetryM;
+    private static final int PIPELINE = 4;
+    private static final int DESIRED_TAG_ID = -1;   // -1 = closest tag in view
 
     @Override
     public void runOpMode() {
 
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
+        TelemetryManager telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
-        // Initialize Limelight
-        limelight = hardwareMap.get(
-                Limelight3A.class, "limelight");
+        LimelightTagLocalizer tagLocalizer =
+                new LimelightTagLocalizer(hardwareMap, "limelight", PIPELINE);
+        Limelight3A limelight = tagLocalizer.getLimelight();
 
-        // Initialize GoBilda Pinpoint
-        odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
-
-
-        // Reset Pinpoint position and calibrate its IMU
+        GoBildaPinpointDriver odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
         odo.init();
-
         odo.resetPosAndIMU();
 
-        // Select the configured AprilTag pipeline
-        limelight.pipelineSwitch(4);
+        tagLocalizer.start();
 
         telemetryM.addData("Status", "Initialized");
-        telemetryM.addData("Localization", "MegaTag 1");
         telemetryM.update(telemetry);
 
         waitForStart();
-
         if (isStopRequested()) return;
 
-        limelight.start();
         while (opModeIsActive()) {
 
-            // Update Pinpoint localization
             odo.update();
 
-            // Read Pinpoint heading in degrees
-            double yaw = Math.toDegrees(odo.getHeading());
+            // This copy of the Pinpoint driver adds 90 degrees inside getHeading(),
+            // so remove it here. MegaTag 2 also needs this to be a FIELD heading
+            // (CCW positive), not "0 = however the robot faced at init".
+            double yawDeg = Math.toDegrees(odo.getHeading()) - 90.0;
+            limelight.updateRobotOrientation(yawDeg);
 
-            // Send Pinpoint heading to Limelight for MegaTag 1
-            limelight.updateRobotOrientation(yaw);
+            // ---- Tag-relative offset (what you want for localizing to a tag) ----
+            LimelightTagLocalizer.TagOffset offset = tagLocalizer.getOffset(DESIRED_TAG_ID);
 
-            // Retrieve latest Limelight result
-            LLResult result = limelight.getLatestResult();
+            telemetryM.addData("Tag status", tagLocalizer.getStatus());
+            if (offset != null) {
+                telemetryM.addData("Tag ID", offset.tagId);
+                telemetryM.addData("Forward (in)", offset.forwardIn());
+                telemetryM.addData("Lateral (in)", offset.lateralIn());
+                telemetryM.addData("Heading (deg)", offset.headingDeg);
 
-            telemetryM.addData("Pinpoint Yaw (deg)", yaw);
-
-            if (result != null && result.isValid()) {
-
-                Pose3D botpose = result.getBotpose();
-
-                if (botpose != null) {
-
-                    double x = botpose.getPosition().x;
-                    double y = botpose.getPosition().y;
-
-                    double limelightYaw = botpose.getOrientation()
-                            .getYaw(AngleUnit.DEGREES);
-
-                    telemetryM.addData("Status", "Valid pose");
-                    telemetryM.addData("MegaTag 1 X (m)", x);
-                    telemetryM.addData("MegaTag 1 Y (m)", y);
-                    telemetryM.addData(
-                            "MegaTag 1 Yaw (deg)", limelightYaw);
-
-                    telemetryM.addData(
-                            "AprilTags Used",
-                            result.getBotposeTagCount());
-
-                    telemetryM.addData(
-                            "Average Tag Distance (m)",
-                            result.getBotposeAvgDist());
-
-                    telemetryM.addData(
-                            "Average Tag Area (%)",
-                            result.getBotposeAvgArea());
-
-                    telemetryM.addData(
-                            "Pipeline Index", result.getPipelineIndex());
-                    telemetryM.addData("Actual Pipeline", result.getPipelineIndex());
-                    telemetryM.addData("Pipeline Type", result.getPipelineType());
-                    telemetryM.addData("Tags Used", result.getBotposeTagCount());
-
-                } else {
-                    telemetryM.addData(
-                            "Status", "Field pose unavailable");
-                }
-
-            } else {
-                telemetryM.addData(
-                        "Status", "No valid Limelight result");
+                telemetryM.addData("Raw X (m)", offset.rawX);
+                telemetryM.addData("Raw Y (m)", offset.rawY);
+                telemetryM.addData("Raw Z (m)", offset.rawZ);
+                telemetryM.addData("Raw yaw (deg)", offset.rawYaw);
+                telemetryM.addData("Raw pitch (deg)", offset.rawPitch);
+                telemetryM.addData("Raw roll (deg)", offset.rawRoll);
             }
 
+            // ---- Field pose (only works if the tag ID is in the Limelight's field map) ----
+            LLResult result = limelight.getLatestResult();
+            if (result != null && result.isValid()) {
+                telemetryM.addData("Pipeline", result.getPipelineIndex()
+                        + " (" + result.getPipelineType() + ")");
+                telemetryM.addData("Map tags used", result.getBotposeTagCount());
+
+                Pose3D mt1 = result.getBotpose();
+                if (mt1 != null) {
+                    telemetryM.addData("MT1 X (m)", mt1.getPosition().x);
+                    telemetryM.addData("MT1 Y (m)", mt1.getPosition().y);
+                    telemetryM.addData("MT1 Yaw (deg)",
+                            mt1.getOrientation().getYaw(AngleUnit.DEGREES));
+                }
+
+                Pose3D mt2 = result.getBotpose_MT2();
+                if (mt2 != null) {
+                    telemetryM.addData("MT2 X (m)", mt2.getPosition().x);
+                    telemetryM.addData("MT2 Y (m)", mt2.getPosition().y);
+                }
+            }
+
+            telemetryM.addData("Pinpoint yaw sent (deg)", yawDeg);
             telemetryM.update(telemetry);
         }
 
-        limelight.stop();
+        tagLocalizer.stop();
     }
 }
+

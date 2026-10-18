@@ -6,6 +6,7 @@ import com.pedropathing.api.PoseFactory;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.pedropathing.utils.Angle;
 import com.pedropathing.utils.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -19,45 +20,103 @@ import static com.pedropathing.api.Paths.*;
 @Autonomous(name = "Crazy")
 public class BlueAuto extends LinearOpMode {
 
-    private enum State {
-        DETECT,
-        WAIT_DETECT,
-        DELAY_DETECT,
-
-        TOPRIGHT,
-        WAIT_TOPRIGHT,
-        DELAY_TOPRIGHT,
-
-        MID_OUT,
-        WAIT_MID_OUT,
-        DELAY_MID_OUT,
-
-        DONE,
-        FAILED
+    // ---------------------------------------------------------------
+    // Route: one entry per leg, run in order. Each leg goes through
+    // the same three phases: FOLLOW -> WAIT -> PAUSE, then the next leg.
+    // To reorder or drop a leg, just edit this enum.
+    // ---------------------------------------------------------------
+    private enum Leg {
+        TO_FRONT_SHOOT,     // start        -> frontShoot  (line)   shoot preload
+        TO_PRE_INTAKE,      // frontShoot   -> preIntake   (line)   intake
+        RETURN_TO_SHOOT,    // preIntake    -> frontShoot  (line)   shoot
+        TO_INT_FLOWER,      // frontShoot   -> intFlower   (CURVE)  intake
+        TO_BACK_SHOOT,      // intFlower    -> backShoot   (line)   shoot
+        TO_POST_INTAKE,     // backShoot    -> postIntake  (line)   finish
+        DONE
     }
 
-    private State robotstate = State.DETECT;
-    TelemetryManager telemetryM;
+    private enum Phase { FOLLOW, WAIT, PAUSE }
 
+    private Leg leg = Leg.TO_FRONT_SHOOT;
+    private Phase phase = Phase.FOLLOW;
+
+    private TelemetryManager telemetryM;
     private Follower follower;
     private Timer timer;
 
-    private static final double PATH_TIMEOUT = 5.0;
-    private static final double STATE_DELAY = 0.2;
+    private static final double PATH_TIMEOUT = 5.0;   // seconds per leg before giving up
+    private static final double STATE_DELAY = 0.2;    // pause after each leg (shoot/intake goes here)
+
+    // Fail-safes: move on when "close enough", even if follower.isBusy() is still true.
+    private static final double POS_TOLERANCE = 1.5;                         // inches
+    private static final double HEADING_TOLERANCE = Math.toRadians(5);       // radians
+    private static final double TIMEOUT_POS_TOLERANCE = 4.0;                 // inches; looser check at timeout
 
     private boolean timedOut = false;
     private String failedPath = "None";
+    private String arriveReason = "-";
 
+    // ---------------- Poses ----------------
     private final PoseFactory p = PoseFactory.degrees();
 
-    private final Pose start = p.of(85 , 132, 270);
+    private final Pose start = p.of(85, 132, 270);
     private final Pose frontShoot = p.of(85, 107, 270);
-    private final Pose preIntake = p.of(104.8, 133.6,0);
+    private final Pose preIntake = p.of(104.8, 133.6, 0);
     private final Pose postIntake = p.of(0, 24, 180);
-    private final Pose intFlower = p.of(94,10.6,270);
-    private final Pose firstFloControl = p.of(77,54,0);
-    private final Pose secondFloControl = p.of(94,29.1,0);
-    private final Pose backShoot = p.of(84.1,33.5,90);
+    private final Pose intFlower = p.of(94, 10.6, 270);
+    private final Pose firstFloControl = p.of(77, 54, 0);
+    private final Pose secondFloControl = p.of(94, 29.1, 0);
+    private final Pose backShoot = p.of(84.1, 33.5, 90);
+
+    // ---------------- Paths (built once in init) ----------------
+    private Path toFrontShoot, toPreIntake, returnToShoot, toIntFlower, toBackShoot, toPostIntake;
+
+    private void buildPaths() {
+        // Straight lines, heading turns smoothly from the start pose's heading to the end pose's.
+        toFrontShoot  = line(start, frontShoot).linear(start, frontShoot);
+        toPreIntake   = line(frontShoot, preIntake).linear(frontShoot, preIntake);
+        returnToShoot = line(preIntake, frontShoot).linear(preIntake, frontShoot);
+
+        // The only curve: Bezier through the two flower control points.
+        toIntFlower   = curve(frontShoot, firstFloControl, secondFloControl, intFlower)
+                .linear(frontShoot, intFlower);
+
+        toBackShoot   = line(intFlower, backShoot).linear(intFlower, backShoot);
+        toPostIntake  = line(backShoot, postIntake).linear(backShoot, postIntake);
+    }
+
+    private Path pathFor(Leg l) {
+        switch (l) {
+            case TO_FRONT_SHOOT:  return toFrontShoot;
+            case TO_PRE_INTAKE:   return toPreIntake;
+            case RETURN_TO_SHOOT: return returnToShoot;
+            case TO_INT_FLOWER:   return toIntFlower;
+            case TO_BACK_SHOOT:   return toBackShoot;
+            case TO_POST_INTAKE:  return toPostIntake;
+            default:              return null;
+        }
+    }
+
+    /** Where each leg should end (used for the close-enough checks). */
+    private Pose targetFor(Leg l) {
+        switch (l) {
+            case TO_FRONT_SHOOT:  return frontShoot;
+            case TO_PRE_INTAKE:   return preIntake;
+            case RETURN_TO_SHOOT: return frontShoot;
+            case TO_INT_FLOWER:   return intFlower;
+            case TO_BACK_SHOOT:   return backShoot;
+            case TO_POST_INTAKE:  return postIntake;
+            default:              return null;
+        }
+    }
+
+    private double distanceTo(Pose target) {
+        return follower.pose().distance(target);
+    }
+
+    private double headingErrorTo(Pose target) {
+        return Math.abs(Angle.error(follower.pose().heading(), target.heading()));
+    }
 
     @Override
     public void runOpMode() throws InterruptedException {
@@ -67,115 +126,112 @@ public class BlueAuto extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         timer = new Timer();
 
+        buildPaths();
 
         waitForStart();
-
         if (isStopRequested()) return;
+
+        timer.reset();
 
         while (opModeIsActive()) {
 
             follower.update();
 
-            switch (robotstate) {
+            if (leg == Leg.DONE) {
+                follower.manual(0, 0, 0);
+            } else {
+                switch (phase) {
 
-                case DETECT:
-                    follower.follow(topR());
-                    newState(State.WAIT_DETECT);
-                    break;
+                    case FOLLOW:
+                        follower.follow(pathFor(leg));
+                        setPhase(Phase.WAIT);
+                        break;
 
-                case WAIT_DETECT:
-                    if (!follower.isBusy()) {
-                        newState(State.DELAY_DETECT);
-                    } else if (timer.get(TimeUnit.SECONDS) >= PATH_TIMEOUT) {
-                        fail("start -> topRight");
+                    case WAIT: {
+                        Pose target = targetFor(leg);
+                        double dist = distanceTo(target);
+                        boolean closeEnough = dist <= POS_TOLERANCE
+                                && headingErrorTo(target) <= HEADING_TOLERANCE;
+                        boolean timeUp = timer.get(TimeUnit.SECONDS) >= PATH_TIMEOUT;
+
+                        if (!follower.isBusy()) {
+                            arrive("follower done");
+                        } else if (closeEnough) {
+                            // Fail-safe 1: still "busy" but already at the target
+                            arrive("close enough");
+                        } else if (timeUp && dist <= TIMEOUT_POS_TOLERANCE) {
+                            // Fail-safe 2: timed out, but near enough to keep the auto going
+                            arrive("timeout, near target");
+                        } else if (timeUp) {
+                            // Fail-safe 3: timed out and far away, so stop safely
+                            fail(leg.name());
+                        }
+                        break;
                     }
-                    break;
 
-                case DELAY_DETECT:
-                    if (timer.get(TimeUnit.SECONDS) >= STATE_DELAY) {
-                        newState(State.TOPRIGHT);
-                    }
-                    break;
-
-                case TOPRIGHT:
-                    follower.follow(topRightPath());
-                    newState(State.WAIT_TOPRIGHT);
-                    break;
-
-                case WAIT_TOPRIGHT:
-                    if (!follower.isBusy()) {
-                        newState(State.DELAY_TOPRIGHT);
-                    } else if (timer.get(TimeUnit.SECONDS) >= PATH_TIMEOUT) {
-                        fail("topRight -> rotate");
-                    }
-                    break;
-
-                case DELAY_TOPRIGHT:
-                    if (timer.get(TimeUnit.SECONDS) >= STATE_DELAY) {
-                        newState(State.MID_OUT);
-                    }
-                    break;
-
-                case MID_OUT:
-                    follower.follow(midOutPath());
-                    newState(State.WAIT_MID_OUT);
-                    break;
-
-                case WAIT_MID_OUT:
-                    if (!follower.isBusy()) {
-                        newState(State.DELAY_MID_OUT);
-                    } else if (timer.get(TimeUnit.SECONDS) >= PATH_TIMEOUT) {
-                        fail("rotate -> midOut");
-                    }
-                    break;
-
-                case DELAY_MID_OUT:
-                    if (timer.get(TimeUnit.SECONDS) >= STATE_DELAY) {
-                        newState(State.DONE);
-                    }
-                    break;
-
-                case DONE:
-                    follower.manual(0, 0, 0);
-                    break;
-
-
+                    case PAUSE:
+                        if (timer.get(TimeUnit.SECONDS) >= STATE_DELAY) {
+                            nextLeg();
+                        }
+                        break;
+                }
             }
-            Pose current = follower.pose();
 
+            Pose current = follower.pose();
             telemetryM.addData("X", current.x());
             telemetryM.addData("Y", current.y());
             telemetryM.addData("Heading", current.heading());
-            telemetryM.addData("State", robotstate);
+            telemetryM.addData("Leg", leg);
+            telemetryM.addData("Phase", phase);
             telemetryM.addData("Follower Busy", follower.isBusy());
             telemetryM.addData("Timer (s)", timer.get(TimeUnit.SECONDS));
             telemetryM.addData("Timed Out", timedOut);
             telemetryM.addData("Failed Path", failedPath);
+            telemetryM.addData("Last Arrival", arriveReason);
             telemetryM.addData("Distance To Path End", follower.distanceToEndpoint());
             telemetryM.update();
         }
     }
 
-    private Path topR() {
-        return line(start, topRight).constant(topRight);
+    /** Hook for mechanism actions when a leg finishes (shooter, intake, etc.). */
+    private void onArrive(Leg arrived) {
+        switch (arrived) {
+            case TO_FRONT_SHOOT:
+            case RETURN_TO_SHOOT:
+            case TO_BACK_SHOOT:
+                // TODO: shoot
+                break;
+            case TO_PRE_INTAKE:
+            case TO_INT_FLOWER:
+                // TODO: intake
+                break;
+            default:
+                break;
+        }
     }
 
-    private Path topRightPath() {
-        return line(topRight, rotate).constant(rotate);
+    private void arrive(String reason) {
+        arriveReason = leg.name() + ": " + reason;
+        onArrive(leg);
+        setPhase(Phase.PAUSE);
     }
 
-    private Path midOutPath() {
-        return line(rotate, midOut).constant(midOut);
+    private void nextLeg() {
+        leg = Leg.values()[leg.ordinal() + 1];
+        setPhase(Phase.FOLLOW);
     }
 
-    private void newState(State state) {
-        robotstate = state;
+    private void setPhase(Phase newPhase) {
+        phase = newPhase;
         timer.reset();
     }
 
     private void fail(String pathName) {
         timedOut = true;
         failedPath = pathName;
-        newState(State.DONE);
+        leg = Leg.DONE;
+        setPhase(Phase.FOLLOW);
     }
 }
+
+

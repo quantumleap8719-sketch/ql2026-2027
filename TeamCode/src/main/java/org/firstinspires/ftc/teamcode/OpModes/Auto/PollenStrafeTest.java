@@ -1,78 +1,56 @@
 package org.firstinspires.ftc.teamcode.OpModes.Auto;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import org.firstinspires.ftc.teamcode.Components.Mecanum;
-@Autonomous(name="Pollen Strafe Test",group="Testing")
+
+@Autonomous(name="Pollen Align Test",group="Testing")
 public class PollenStrafeTest extends LinearOpMode{
     Mecanum mecanum;
     Limelight3A limelight;
-    TelemetryManager telemetryM;
-    boolean aligned=false;
+
     @Override
     public void runOpMode() throws InterruptedException{
-        mecanum = new Mecanum(hardwareMap,telemetry);
-        limelight = hardwareMap.get(Limelight3A.class,"limelight");
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        // green pipeline
-
+        mecanum=new Mecanum(hardwareMap,telemetry);
+        limelight=hardwareMap.get(Limelight3A.class,"limelight");
+        // green ball
         limelight.pipelineSwitch(1);
         limelight.start();
-        telemetryM.addLine("Ready");
-        telemetryM.update();
+        telemetry.addLine("Ready");
+        telemetry.update();
 
         waitForStart();
 
         while(opModeIsActive()){
             LLResult result=limelight.getLatestResult();
-            if(result!=null &&result.isValid()){
-                double area=result.getTa();
+            if(result!=null&&result.isValid()){
                 double tx=result.getTx();
-                telemetryM.addData("Pollen","found");
-                telemetryM.addData("TX",tx);
-                telemetryM.addData("Area",area);
-                // close enough
-                if(area>=8){
-                    mecanum.setPower(0,0,0);
-                    telemetryM.addLine("Pollen reached");
+                telemetry.addData("Pollen","found");
+                telemetry.addData("TX",tx);
+                // ball one side, move forward
+                if(tx>1){
+                    mecanum.setPower(0,0.25,0);
+                    telemetry.addLine("Moving forward");
                 }
-                // first line up with ball
-                else if(!aligned){
-                    if(tx>4){
-                        mecanum.setPower(0,0.25,0);
-                        telemetryM.addLine("Moving forward");
-                    }
-                    else if(tx<-4){
-                        mecanum.setPower(0,-0.25,0);
-                        telemetryM.addLine("Moving backward");
-                    }
-                    else{
-                        // lined up, stop for a sec
-                        mecanum.setPower(0,0,0);
-                        mecanum.writeAll();
-                        telemetryM.addLine("Aligned");
-                        telemetryM.update();
-                        sleep(1000);
-                        aligned=true;
-                    }
+                // ball other side, move backward
+                else if(tx<-1){
+                    mecanum.setPower(0,-0.25,0);
+                    telemetry.addLine("Moving backward");
                 }
-                // now only move toward ball
+                // camera lined up with ball
                 else{
-                    mecanum.setPower(-0.25,0,0);
-                    telemetryM.addLine("Moving toward pollen");
+                    mecanum.setPower(0,0,0);
+                    telemetry.addLine("aligned");
                 }
             }
             else{
-                // no ball
                 mecanum.setPower(0,0,0);
-                telemetryM.addLine("No pollen");
+                telemetry.addLine("No pollen");
             }
             mecanum.writeAll();
-            telemetryM.update();
+            telemetry.update();
         }
         mecanum.setPower(0,0,0);
         mecanum.writeAll();

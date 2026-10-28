@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.OpModes;
+package org.firstinspires.ftc.teamcode.OpModes.Localization;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -16,11 +16,7 @@ public class pinpointTest extends LinearOpMode {
         GoBildaPinpointDriver odo =
                 hardwareMap.get(GoBildaPinpointDriver.class, "odo");
 
-        odo.setOffsets(
-                2.636909785233145,
-                -4.6039220854992005,
-                DistanceUnit.INCH
-        );
+        odo.setOffsets(2.636909785233145, -4.6039220854992005, DistanceUnit.INCH);
 
         odo.setEncoderDirections(
                 GoBildaPinpointDriver.EncoderDirection.FORWARD,
